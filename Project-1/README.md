@@ -42,6 +42,7 @@ A* expands states in order of their priority `f = g + h`, where:
 - **h** = the heuristic (our **lower bound** on how many more steps are needed).
 
 ### Why the Lower Bound Is Crucial
+
 ```python
 def heuristic(state, goal, sizes):
     needed = goal - state[-1]
@@ -51,10 +52,8 @@ def heuristic(state, goal, sizes):
     return math.inf if not finite else ceil(abs(needed) / min(finite))
 ```
 
-
 - The heuristic here in the code snippet, doesn't *overestimate* the remaining cost, so it is **admissible**.
 - An admissible heuristic guarantees that A\* always finds the optimal (shortest) path. Without a valid lower bound, it would just be a uniform-cost search, losing A*'s efficiency advantage.
-
 
 ## **Run program:**
 

@@ -56,8 +56,9 @@ def heuristic(state, goal, sizes):
     needed = goal - state[-1]
     if not needed: 
         return 0
-    finite = sizes[:-1]
+    finite = sizes[:-1]  # exclude infinite container
     return math.inf if not finite else ceil(abs(needed) / min(finite))
+
 
 def fill(current_state, sizes):
     """
@@ -117,9 +118,10 @@ def a_star(file_path="input.txt"):
         return -1 # No solution possible
     
     start = tuple([0] * len(sizes)) # Initial state: all pitchers are empty
-    visited = set([start])
+    visited = set([start])      ## Visited = {(0,0,0,0,0)}
     pq = queue.PriorityQueue()  # (priority, steps, state)
-    pq.put((heuristic(start, goal, sizes), 0, start))
+    pq.put((heuristic(start, goal, sizes), 0, start)) 
+    ## start, heuristic((0,0,0,0,0), 143, [2,5,6,72,inf])
     
     while not pq.empty():
         _, steps, state = pq.get()
