@@ -5,4 +5,7 @@
 ## List of Projects
 
 ### Project-1 (Water Pitcher)
+
 ### Project-2 (CSP – NQueens)
+
+### Project-3 (Generalized Tic Tac Toe – n X n)
