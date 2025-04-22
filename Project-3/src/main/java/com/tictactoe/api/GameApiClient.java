@@ -10,18 +10,17 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
+import java.util.List;
 
 public class GameApiClient {
     private static final HttpClient client = HttpClient.newHttpClient();
     private static final Gson gson = new Gson();
-    // Typically the user sets the base URL in .env, but we keep default:
     private static final String API_URL = "https://www.notexponential.com/aip2pgaming/api/index.php";
 
-    // GET
+    // Simplified HTTP request handler for GET requests
     private static JsonObject executeGetRequest(Map<String, String> params) throws IOException, InterruptedException {
         String url = API_URL + "?" + buildQueryString(params);
 
@@ -35,7 +34,7 @@ public class GameApiClient {
         return processResponse(client.send(request, HttpResponse.BodyHandlers.ofString()));
     }
 
-    // POST
+    // Simplified HTTP request handler for POST requests
     private static JsonObject executePostRequest(Map<String, String> params) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL))
@@ -48,78 +47,73 @@ public class GameApiClient {
         return processResponse(client.send(request, HttpResponse.BodyHandlers.ofString()));
     }
 
+    // Common response processing logic
     private static JsonObject processResponse(HttpResponse<String> response) {
         if (response.statusCode() != 200) {
             throw new RuntimeException("API request failed with status code: " + response.statusCode());
         }
+
         JsonObject jsonResponse = JsonParser.parseString(response.body()).getAsJsonObject();
         if (jsonResponse.has("code") && jsonResponse.get("code").getAsString().equals("FAIL")) {
             throw new RuntimeException("API request failed: " + jsonResponse.get("message").getAsString());
         }
+
         return jsonResponse;
     }
 
+    // Utility method to build query parameters
     private static String buildQueryString(Map<String, String> parameters) {
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> e : parameters.entrySet()) {
-            if (sb.length() > 0) {
-                sb.append("&");
+        StringBuilder queryString = new StringBuilder();
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            if (queryString.length() > 0) {
+                queryString.append("&");
             }
-            sb.append(e.getKey()).append("=").append(e.getValue());
+            queryString.append(entry.getKey())
+                    .append("=")
+                    .append(entry.getValue());
         }
-        return sb.toString();
+        return queryString.toString();
     }
 
     // Create a new game
-    public static String createGame(String teamId1, String teamId2, int boardSize, int target)
+    // Changed param names to match the API docs: team1Id, team2Id.
+    public static String createGame(String team1Id, String team2Id, int boardSize, int target)
             throws IOException, InterruptedException {
         Map<String, String> params = new HashMap<>();
         params.put("type", "game");
-        params.put("teamId1", teamId1);
-        params.put("teamId2", teamId2);
+        params.put("teamId1", team1Id);
+        params.put("teamId2", team2Id);
         params.put("gameType", "TTT");
         params.put("boardSize", String.valueOf(boardSize));
         params.put("target", String.valueOf(target));
 
-        return executePostRequest(params).get("gameId").getAsString();
+        JsonObject response = executePostRequest(params);
+        return response.get("gameId").getAsString();
     }
 
-    // Get list of games (myGames or myOpenGames)
-    public static List<String> getGames(boolean openOnly) throws IOException, InterruptedException {
-        Map<String, String> params = new HashMap<>();
-        params.put("type", openOnly ? "myOpenGames" : "myGames");
-        JsonObject response = executeGetRequest(params);
-        String gamesString = response.get("games").getAsString();
-        return Arrays.asList(gamesString.split(","));
-    }
-
-    public static List<String> getMyGames() throws IOException, InterruptedException {
-        return getGames(false);
-    }
-
-    public static List<String> getMyOpenGames() throws IOException, InterruptedException {
-        return getGames(true);
-    }
-
-    // Make a move (multipart/form-data)
+    // Make a move in a game (multipart form-data)
     public static String makeMove(String gameId, String teamId, int row, int col)
             throws IOException, InterruptedException {
         String boundary = "Boundary" + System.currentTimeMillis();
         String CRLF = "\r\n";
         StringBuilder body = new StringBuilder();
 
+        // type=move
         body.append("--").append(boundary).append(CRLF);
         body.append("Content-Disposition: form-data; name=\"type\"").append(CRLF).append(CRLF);
         body.append("move").append(CRLF);
 
+        // gameId
         body.append("--").append(boundary).append(CRLF);
         body.append("Content-Disposition: form-data; name=\"gameId\"").append(CRLF).append(CRLF);
         body.append(gameId).append(CRLF);
 
+        // teamId
         body.append("--").append(boundary).append(CRLF);
         body.append("Content-Disposition: form-data; name=\"teamId\"").append(CRLF).append(CRLF);
         body.append(teamId).append(CRLF);
 
+        // move row,col
         body.append("--").append(boundary).append(CRLF);
         body.append("Content-Disposition: form-data; name=\"move\"").append(CRLF).append(CRLF);
         body.append(row).append(",").append(col).append(CRLF);
@@ -157,18 +151,20 @@ public class GameApiClient {
         return executeGetRequest(params);
     }
 
-    // Get board as string
+    // Get the current board as a string
     public static String getBoardString(String gameId) throws IOException, InterruptedException {
         Map<String, String> params = new HashMap<>();
         params.put("type", "boardString");
         params.put("gameId", gameId);
 
         JsonObject response = executeGetRequest(params);
+
         if (response.has("output")) {
             return response.get("output").getAsString();
         } else if (response.has("board")) {
             return response.get("board").getAsString();
         }
+
         throw new RuntimeException("Board string not found in response");
     }
 }
