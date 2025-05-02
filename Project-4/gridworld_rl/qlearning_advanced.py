@@ -1270,6 +1270,49 @@ class DynaQAgent:
         else:
             return 0.0  # No penalty for non-boundary positions
 
+    def save_successful_path(self, world_id_str, episode, path, reward, is_confirmed_goal=True):
+        """
+        Save the path taken to reach a goal to a JSON file.
+        Only called when a goal state is found.
+
+        Args:
+            world_id_str: String ID of the world
+            episode: Episode number
+            path: List of (x, y) coordinates in order
+            reward: Final reward received
+            is_confirmed_goal: Whether this is a confirmed goal or just a potential goal
+        """
+        # Create a directory for successful paths if it doesn't exist
+        successful_paths_dir = os.path.join(self.save_dir, "successful_paths")
+        if not os.path.exists(successful_paths_dir):
+            os.makedirs(successful_paths_dir)
+        
+        # Generate a timestamp for the filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Construct the filename
+        goal_type = "confirmed_goal" if is_confirmed_goal else "potential_goal"
+        filename = f"world_{world_id_str}_episode_{episode}_{goal_type}_{timestamp}.json"
+        filepath = os.path.join(successful_paths_dir, filename)
+        
+        # Prepare data to save
+        path_data = {
+            "world_id": world_id_str,
+            "episode": episode,
+            "timestamp": timestamp,
+            "path_length": len(path),
+            "final_reward": float(reward),
+            "is_confirmed_goal": is_confirmed_goal,
+            "path_coordinates": path
+        }
+        
+        # Save to JSON file
+        with open(filepath, 'w') as f:
+            json.dump(path_data, f, indent=2)
+        
+        print(f"Saved successful path to {filepath}")
+        return filepath
+
 if __name__ == "__main__":
     # Example of manually specifying goal positions
     # manual_goals = {
@@ -1291,11 +1334,11 @@ if __name__ == "__main__":
     )
     
     # You can also add a goal later
-    # agent.add_goal(world_id=5, goal_position=(12, 18))
+    agent.add_goal(world_id=4, goal_position=(39, 39))
     
     # Train on multiple worlds sequentially
-    worlds_to_train = [7]  # Add more as needed
-    episodes_per_world = 50
+    worlds_to_train = [4]  # Add more as needed
+    episodes_per_world = 25
     
     for world_id in worlds_to_train:
         # Use the use_manual_goals parameter to enable/disable manual goal guidance
