@@ -134,6 +134,7 @@ def a_star(file_path="input.txt"):
                 visited.add(next)
                 cost = steps + 1
                 pq.put((cost + heuristic(next, goal, sizes), cost, next))
+                # print(f"State: {next}, Steps: {cost}, Heuristic: {heuristic(next, goal, sizes)}")
     return -1 # No solution found
 
 if __name__ == "__main__":

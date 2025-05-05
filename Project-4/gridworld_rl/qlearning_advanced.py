@@ -415,10 +415,11 @@ class DynaQAgent:
             print(f"Error restoring from backup: {e}")
             return False
 
-    def train_world(self, world_id, num_episodes=5, use_manual_goals=True):
+    def train_world(self, world_id, num_episodes=5, use_manual_goals=True, manual_goal_probability=0.5):
         """Train on a single world for a given number of episodes."""
         world_id_str = str(world_id)
         print(f"\n=== Training on world {world_id} for {num_episodes} episodes ===")
+        print(f"Manual goal influence level: {manual_goal_probability * 100:.1f}%")
         
         # Initialize world knowledge for this world if not exists
         if world_id_str not in self.world_knowledge:
@@ -442,6 +443,9 @@ class DynaQAgent:
         
         for episode in range(start_episode, start_episode + num_episodes):
             print(f"\n--- Episode {episode} ---")
+            
+            # Track if this is the last episode
+            is_last_episode = episode == (start_episode + num_episodes - 1)
             
             # Enter the world
             print(f"Entering world {world_id}...")
@@ -526,8 +530,8 @@ class DynaQAgent:
                 if use_manual_goals and len(self.world_knowledge[world_id_str].get('goals', [])) > 0:
                     manual_action = self.choose_action_with_manual_goals(x, y, world_id_str)
                     
-                    # If we have a suggested action from manual goals, use it with high probability
-                    if manual_action is not None and random.random() < 0.8:
+                    # If we have a suggested action from manual goals, use it with reduced probability
+                    if manual_action is not None and random.random() < manual_goal_probability:
                         a = manual_action
                         print(f"Using manual goal knowledge to choose action {a}")
                     else:
@@ -607,25 +611,29 @@ class DynaQAgent:
                         # Save state and handle re-entry if needed (common for traps/errors)
                         self.save_state()
                         
-                        # Need to re-enter the world after hitting a terminal state that required re-entry
-                        # (Assuming the API requires re-entry after None state, similar to traps/errors)
-                        print("Re-entering world after terminal state...")
-                        rejoined = False
-                        rejoin_attempts = 0
-                        max_rejoin_attempts = 3
-                        
-                        while not rejoined and rejoin_attempts < max_rejoin_attempts:
-                            rejoin_attempts += 1
-                            try:
-                                self.api.enter_world(world_id)
-                                rejoined = True
-                                print("Successfully re-entered world after terminal state")
-                            except Exception as e:
-                                print(f"Failed to re-enter world: {str(e)}, attempt {rejoin_attempts}/{max_rejoin_attempts}")
-                                time.sleep(1)
-                        
-                        if not rejoined:
-                            print("Could not re-enter world after terminal state. Ending episode.")
+                        # Only re-enter the world if this is NOT the last episode
+                        if not is_last_episode:
+                            # Need to re-enter the world after hitting a terminal state that required re-entry
+                            # (Assuming the API requires re-entry after None state, similar to traps/errors)
+                            print("Re-entering world after terminal state...")
+                            rejoined = False
+                            rejoin_attempts = 0
+                            max_rejoin_attempts = 3
+                            
+                            while not rejoined and rejoin_attempts < max_rejoin_attempts:
+                                rejoin_attempts += 1
+                                try:
+                                    self.api.enter_world(world_id)
+                                    rejoined = True
+                                    print("Successfully re-entered world after terminal state")
+                                except Exception as e:
+                                    print(f"Failed to re-enter world: {str(e)}, attempt {rejoin_attempts}/{max_rejoin_attempts}")
+                                    time.sleep(1)
+                            
+                            if not rejoined:
+                                print("Could not re-enter world after terminal state. Ending episode.")
+                        else:
+                            print("Last episode completed. Not re-entering the world.")
                         
                         break # End the episode loop
                     
@@ -691,13 +699,17 @@ class DynaQAgent:
                     
                     encountered_trap = True
                     
-                    # Re-enter the world after the error
-                    print("Re-entering world after error...")
-                    try:
-                        self.api.enter_world(world_id)
-                        print("Successfully re-entered world after error")
-                    except Exception as re_e:
-                        print(f"Failed to re-enter world: {str(re_e)}")
+                    # Only re-enter the world if this is NOT the last episode
+                    if not is_last_episode:
+                        # Re-enter the world after the error
+                        print("Re-entering world after error...")
+                        try:
+                            self.api.enter_world(world_id)
+                            print("Successfully re-entered world after error")
+                        except Exception as re_e:
+                            print(f"Failed to re-enter world: {str(re_e)}")
+                    else:
+                        print("Last episode completed with error. Not re-entering the world.")
                     
                     break # End the episode after an error
             
@@ -753,12 +765,13 @@ class DynaQAgent:
                     self.world_knowledge[world_id_str]['goals'].append(goal_str)
                     goals_added += 1
                     
-                    # Update Q-values to make this goal location highly attractive
+                    # Update Q-values to make this goal location moderately attractive
+                    # (reduced from 10.0 to 5.0 to make it less dominant)
                     x, y = goal_pos
                     if 0 <= x < self.width and 0 <= y < self.height:
-                        # Set high Q-values for all actions leading to the goal state
+                        # Set moderate Q-values for all actions leading to the goal state
                         for action in range(self.num_actions):
-                            self.Q[x, y, action] = 10.0  # High value to attract the agent
+                            self.Q[x, y, action] = 5.0  # Reduced value to make manual goals less dominant
         
         if goals_added > 0:
             print(f"Added {goals_added} manual goal positions to world knowledge")
@@ -788,14 +801,14 @@ class DynaQAgent:
         if goal_str not in self.world_knowledge[world_id_str]['goals']:
             self.world_knowledge[world_id_str]['goals'].append(goal_str)
             
-            # Update Q-values to make this goal location highly attractive
+            # Update Q-values to make this goal location moderately attractive
             x, y = goal_position
             if 0 <= x < self.width and 0 <= y < self.height:
-                # Set high Q-values for all actions leading to the goal state
+                # Set moderate Q-values for all actions leading to the goal state
                 for action in range(self.num_actions):
-                    self.Q[x, y, action] = 10.0  # High value to attract the agent
+                    self.Q[x, y, action] = 5.0  # Reduced from 10.0 to make manual goals less dominant
             
-            print(f"Added manual goal at position {goal_position} to world {world_id}")
+            print(f"Added manual goal at position {goal_position} to world {world_id} with moderate influence")
             
             # Also store it in manual_goals for future reference
             if world_id_str not in self.manual_goals:
@@ -813,7 +826,7 @@ class DynaQAgent:
     def choose_action_with_manual_goals(self, x, y, world_id):
         """
         Choose an action that will move the agent toward the nearest known goal
-        while avoiding known traps.
+        while avoiding known traps. Includes randomness to encourage exploration.
         
         Args:
             x, y: Current position
@@ -828,6 +841,10 @@ class DynaQAgent:
         if world_id_str not in self.world_knowledge or not self.world_knowledge[world_id_str]['goals']:
             return None
         
+        # Introduce some randomness - 15% chance to just return None and use regular action selection
+        if random.random() < 0.15:
+            return None
+            
         # Find the nearest goal
         nearest_goal = None
         min_distance = float('inf')
@@ -845,6 +862,12 @@ class DynaQAgent:
         
         if nearest_goal is None:
             return None
+        
+        # If we're quite far from the goal, allow more randomness
+        if min_distance > 10:
+            # 40% chance to ignore the goal and do regular exploration when far away
+            if random.random() < 0.4:
+                return None
         
         # If we're close to the goal (within 3 steps), move directly toward it
         # unless we know there's a trap in that direction
@@ -937,6 +960,10 @@ class DynaQAgent:
                 else:
                     return 2  # South
         
+        # Sometimes (20% chance) choose a random action from the available ones
+        if random.random() < 0.2:
+            return random.choice([a for a, _ in action_distances])
+            
         # Sort actions by distance (ascending)
         action_distances.sort(key=lambda x: x[1])
         
@@ -1333,16 +1360,24 @@ if __name__ == "__main__":
         plots_dir="plots",
     )
     
-    # You can also add a goal later
+    # You can also add a goal later, but with reduced influence
     agent.add_goal(world_id=4, goal_position=(39, 39))
     
     # Train on multiple worlds sequentially
-    worlds_to_train = [4]  # Add more as needed
-    episodes_per_world = 25
+    worlds_to_train = [3]  # Add more as needed
+    episodes_per_world = 20
+    
+    # Lower manual goal probability to reduce reliance (from 0.8 to 0.4)
+    manual_goal_probability = 0.4
     
     for world_id in worlds_to_train:
-        # Use the use_manual_goals parameter to enable/disable manual goal guidance
-        agent.train_world(world_id=world_id, num_episodes=episodes_per_world, use_manual_goals=True)
+        # Use manual goals with reduced probability
+        agent.train_world(
+            world_id=world_id, 
+            num_episodes=episodes_per_world, 
+            use_manual_goals=True,
+            manual_goal_probability=manual_goal_probability
+        )
     
     # Print summary of what the agent learned
     agent.print_world_knowledge()
